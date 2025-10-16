@@ -1,0 +1,224 @@
+openapi: 3.1.0
+info:
+  title: Restaurante TPI - API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /health:
+    get:
+      summary: Health de la API
+      responses:
+        '200': { description: OK }
+
+  /db/health:
+    get:
+      summary: Health de la base de datos
+      responses:
+        '200': { description: OK }
+
+  /productos:
+    get:
+      summary: Listar productos
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Producto' }
+    post:
+      summary: Crear producto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductoCreate' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Producto' }
+
+  /productos/{id}:
+    get:
+      summary: Obtener producto
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Producto' }
+        '404': { description: No existe }
+    put:
+      summary: Actualizar producto
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductoUpdate' }
+      responses:
+        '200': { description: OK }
+        '404': { description: No existe }
+    delete:
+      summary: Eliminar producto
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Eliminado }
+        '404': { description: No existe }
+
+  /pedidos:
+    get:
+      summary: Listar pedidos
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Crear pedido
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                creado_por: { type: string }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [producto_id, cantidad]
+                    properties:
+                      producto_id: { type: integer }
+                      cantidad: { type: integer, minimum: 1 }
+      responses:
+        '201': { description: Creado }
+
+  /pedidos/{id}:
+    get:
+      summary: Obtener pedido con items
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+        '404': { description: No existe }
+    put:
+      summary: Actualizar pedido (creado_por/estado)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                creado_por: { type: string }
+                estado:
+                  type: string
+                  enum: [CREADO, CONFIRMADO, EN_COCINA, LISTO, ENTREGADO, CANCELADO]
+    delete:
+      summary: Eliminar pedido
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Eliminado }
+
+  /pedidos/{id}/items:
+    post:
+      summary: Agregar item a pedido CREADO
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [producto_id, cantidad]
+              properties:
+                producto_id: { type: integer }
+                cantidad: { type: integer, minimum: 1 }
+      responses:
+        '201': { description: OK }
+
+  /pedidos/{id}/items/{itemId}:
+    delete:
+      summary: Eliminar item de pedido CREADO
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: itemId
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+
+  /pedidos/{id}/confirmar:
+    post:
+      summary: Confirmar pedido (valida stock, recalcula total, descuenta stock y cambia estado)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+        '400': { description: Error (stock insuficiente u otra) }
+
+components:
+  schemas:
+    Producto:
+      type: object
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        precio: { type: number, format: double }
+        stock_actual: { type: integer }
+        activo: { type: boolean }
+        creado_en: { type: string, format: date-time }
+    ProductoCreate:
+      type: object
+      required: [nombre, precio]
+      properties:
+        nombre: { type: string }
+        precio: { type: number, format: double, minimum: 0 }
+        stock_actual: { type: integer, minimum: 0, default: 0 }
+        activo: { type: boolean, default: true }
+    ProductoUpdate:
+      type: object
+      properties:
+        nombre: { type: string }
+        precio: { type: number, format: double, minimum: 0 }
+        stock_actual: { type: integer, minimum: 0 }
+        activo: { type: boolean }
