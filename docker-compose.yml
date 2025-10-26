@@ -1,0 +1,93 @@
+services:
+  api:
+    image: node:18-alpine
+    working_dir: /app
+    command: sh -lc 'if [ ! -d node_modules ]; then npm ci || npm install; fi; node src/api/index.js'
+    ports:
+      - "8081:8080"
+    environment:
+      PORT: 8080
+      JWT_SECRET: "changeme"
+      JWT_EXPIRES_IN: 3600
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: restaurante
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    volumes:
+      - ./:/app
+      - api_node_modules:/app/node_modules
+    depends_on:
+      db:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+
+  db:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: restaurante
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  ws:
+    image: node:18-alpine
+    working_dir: /app
+    command: sh -lc 'if [ ! -d node_modules ]; then npm ci || npm install; fi; node src/ws/index.js'
+    ports:
+      - "8090:8090"
+    environment:
+      WS_PORT: 8090
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    volumes:
+      - ./:/app
+      - ws_node_modules:/app/node_modules
+    depends_on:
+      rabbitmq:
+        condition: service_started
+  worker:
+    image: node:18-alpine
+    working_dir: /app
+    command: sh -lc 'if [ -z "$(ls -A node_modules 2>/dev/null)" ]; then npm install --no-audit --prefer-online --loglevel=warn; fi; node src/worker/index.js'
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: restaurante
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    volumes:
+      - ./:/app
+      - worker_node_modules:/app/node_modules
+    depends_on:
+      db:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+
+volumes:
+  worker_node_modules:
+  pgdata:
+  api_node_modules:
+  ws_node_modules:
+
+
+  
+
+
+
+
