@@ -2,58 +2,66 @@
 const express = require('express');
 const dotenv = require('dotenv');
 
-// No sobrescribas variables del contenedor (db, rabbit, etc.)
 dotenv.config({ override: false });
 
-const { pool } = require('./db');
+const health = require('./controllers/health.controller');
+const productos = require('./controllers/producto.controller');
+const pedidos = require('./controllers/pedido.controller');
+const authController = require('./auth/auth.controller');
+const { auth, requireRole } = require('./auth/auth.middleware');
 
 const app = express();
 
-// Middlewares básicos
 app.use(express.json());
 
-// --------- Health checks ----------
-app.get('/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'api',
-    timestamp: new Date().toISOString(),
-  });
-});
+// ---------- Health ----------
+app.get('/health', health.liveness);
+app.get('/db/health', health.dbHealth);
 
-app.get('/db/health', async (_req, res) => {
-  try {
-    const r = await pool.query(
-      'select now() as now, current_database() as db, current_user as usr;'
-    );
-    res.json({ ok: true, ...r.rows[0] });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
+// ---------- Auth ----------
+app.post('/auth/login', authController.login);
+app.get('/auth/me', auth, authController.me);
 
-// --------- Rutas de negocio ----------
-const productos = require('./controllers/producto.controller');
-const pedidos = require('./controllers/pedido.controller');
+// ---------- Productos ----------
+// Ejemplo de políticas de acceso:
+// - listar/obtener: cualquier usuario autenticado
+// - crear/actualizar/eliminar: solo admin
+app.get('/productos', auth, productos.listar);
+app.get('/productos/:id', auth, productos.obtener);
+app.post('/productos', auth, requireRole(['admin']), productos.crear);
+app.put('/productos/:id', auth, requireRole(['admin']), productos.actualizar);
+app.delete('/productos/:id', auth, requireRole(['admin']), productos.eliminar);
 
-// Productos
-app.get('/productos', productos.listar);
-app.get('/productos/:id', productos.obtener);
-app.post('/productos', productos.crear);
-app.put('/productos/:id', productos.actualizar);
-app.delete('/productos/:id', productos.eliminar);
+// ---------- Pedidos ----------
+// - listar/obtener: cualquier usuario autenticado
+// - crear/editar/items: mozo o admin
+// - eliminar: admin
+// - confirmar: cocina o admin
+app.get('/pedidos', auth, pedidos.listar);
+app.get('/pedidos/:id', auth, pedidos.obtener);
+app.post('/pedidos', auth, requireRole(['mozo', 'admin']), pedidos.crear);
+app.put('/pedidos/:id', auth, requireRole(['mozo', 'admin']), pedidos.actualizar);
+app.delete('/pedidos/:id', auth, requireRole(['admin']), pedidos.eliminar);
+app.post(
+  '/pedidos/:id/items',
+  auth,
+  requireRole(['mozo', 'admin']),
+  pedidos.agregarItem
+);
+app.delete(
+  '/pedidos/:id/items/:itemId',
+  auth,
+  requireRole(['mozo', 'admin']),
+  pedidos.eliminarItem
+);
+app.post(
+  '/pedidos/:id/confirmar',
+  auth,
+  requireRole(['cocina', 'admin']),
+  pedidos.confirmar
+);
 
-// Pedidos
-app.get('/pedidos', pedidos.listar);
-app.get('/pedidos/:id', pedidos.obtener);
-app.post('/pedidos', pedidos.crear);
-app.put('/pedidos/:id', pedidos.actualizar);
-app.delete('/pedidos/:id', pedidos.eliminar);
-app.post('/pedidos/:id/items', pedidos.agregarItem);
-app.delete('/pedidos/:id/items/:itemId', pedidos.eliminarItem);
-app.post('/pedidos/:id/confirmar', pedidos.confirmar);
-
-// --------- 404 y errores ----------
+// ---------- 404 y errores ----------
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
@@ -63,8 +71,9 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-// --------- Inicio del server ----------
+// ---------- Inicio del server ----------
 const PORT = Number(process.env.PORT || 8080);
+
 app.listen(PORT, () => {
   console.log(`[api] listening on http://localhost:${PORT}`);
 });
