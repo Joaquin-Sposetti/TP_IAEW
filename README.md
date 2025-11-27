@@ -1,89 +1,252 @@
-# 🍽️ TP IAEW – Sistema de Restaurante Distribuido
+# Sistema de Pedidos de Restaurante – Trabajo Práctico Integrador IAEW 2025
 
-Este proyecto forma parte del **Trabajo Práctico Integrador de la materia Integración de Aplicaciones Empresariales y Web (IAEW)**.  
-El objetivo es construir una **arquitectura distribuida** para la gestión de pedidos en un restaurante, aplicando buenas prácticas de integración, mensajería, resiliencia y observabilidad.
+Este proyecto implementa un sistema distribuido para gestionar pedidos de un restaurante.  
+El sistema sigue una arquitectura basada en servicios desacoplados, comunicación asincrónica mediante RabbitMQ, observabilidad con OpenTelemetry y trazabilidad completa con Jaeger, Prometheus y Grafana.
 
-El sistema se basa en microservicios y componentes desacoplados que se comunican a través de colas de mensajes, permitiendo alta disponibilidad y tolerancia a fallos.
-
----
-
-## 🧱 Arquitectura general
-
-La arquitectura contempla los siguientes módulos principales:
-
-| Módulo | Rol | Tecnología |
-|--------|-----|-------------|
-| **Frontend (Web SPA)** | Interfaz de usuario para mozos y cocina. |  |
-| **API REST** | Expone endpoints RESTful para CRUD de productos y pedidos. | Node.js + Express |
-| **Base de datos** | Almacena información de productos, pedidos e items. | PostgreSQL |
-| **Broker de mensajería** | Coordina la comunicación asincrónica entre servicios (confirmación de pedidos, stock, notificaciones). | RabbitMQ |
-| **Observabilidad** | Registra métricas, logs y trazas distribuidas. | OpenTelemetry + Prometheus + Grafana + Jaeger |
+Dominio elegido: Pedidos en Restaurante con Cocina.
 
 ---
 
-## 🚀 Ejecución local con Docker Compose
+## Arquitectura en un vistazo
 
-El proyecto incluye un **esqueleto de ejecución** que permite levantar todos los servicios base de forma local mediante Docker.  
-Esto simplifica el desarrollo y evita dependencias manuales en la máquina del desarrollador.
+El proyecto está compuesto por los siguientes servicios:
 
-### 🧩 Estructura del proyecto
+- API (Node.js + Express)
+- Base de datos PostgreSQL
+- Broker de mensajería RabbitMQ
+- Worker que procesa eventos
+- Servidor WebSocket
+- Frontend (React)
+- OpenTelemetry Collector
+- Prometheus
+- Grafana
+- Jaeger (Distributed Tracing)
 
-TP_IAEW/
-├─ docs/
-│ ├─ openapi.yml # Contrato de API (OpenAPI 3.0.3)
-│ └─ c4/ # Diagramas C4 (contexto, contenedor, componente)
-│ └─ workspace.dsl
-├─ src/
-│ ├─ api/ # Código fuente del backend (pendiente)
-│ └─ ...
-├─ data/
-│ └─ postgres/ # Volumen persistente de la base de datos
-├─ docker-compose.yml # Orquestación base de servicios
-└─ README.md # Este archivo
-
-
+Imagen de arquitectura disponible en el archivo `diagramas_c4.png`.  
+Documentación detallada en la carpeta `/docs`.
 
 ---
 
-## 🧰 Requisitos previos
+## Requisitos previos
 
-Antes de ejecutar el proyecto, asegurate de tener instalado:
-
-- **Docker Desktop** (Windows/Mac) o Docker Engine (Linux)
-- **Docker Compose v2.5+**
-- **Puertos libres:**  
-  - `8081` → API  
-  - `5432` → PostgreSQL  
-  - `15672` / `5672` → RabbitMQ (UI y broker)
+- Docker Desktop versión 4.25 o superior
+- Docker Compose versión 2.20 o superior
+- Mínimo 4 GB de RAM (8 GB recomendado)
+- Node.js 18 o superior (solo si se ejecutan partes fuera de Docker)
 
 ---
 
-## ⚙️ Pasos detallados de ejecución
+## Variables de entorno y configuración
 
-### 1️⃣ Clonar el repositorio
+El archivo `.env.example` contiene todas las variables necesarias.  
+Para ejecutar el proyecto se debe crear un archivo `.env` en la raíz con el siguiente contenido:
 
-git clone https://github.com/usuario/TP_IAEW.git
-cd TP_IAEW
+```
+JWT_SECRET=secreto123
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=pedidos
+DATABASE_URL=postgres://postgres:postgres@db:5432/pedidos
+RABBITMQ_URL=amqp://rabbitmq
+```
 
-### 2️⃣ Iniciar los servicios base
-docker compose up
+El archivo `init.sql` incluye las tablas necesarias y los datos iniciales (usuarios, productos, etc.).
 
-### 3️⃣ Verificación de servicios
+---
 
-API placeholder (nginx):
+## Cómo levantar el proyecto local
 
-http://localhost:8081
+Ejecutar desde la carpeta raíz:
 
-Base de datos:
+```
+docker-compose up --build
+```
 
-psql -h localhost -U app -d restaurante
+Esto levanta todos los servicios necesarios.
 
-(Contraseña por defecto: app)
+### Puertos principales
 
-Broker RabbitMQ:
+| Servicio | URL o puerto                |
+|----------|-----------------------------|
+| Frontend   |   http://localhost:5173   |
+| API REST   |   http://localhost:3000   |
+| WebSocket Server | ws://localhost:3001 |
+| RabbitMQ UI |  http://localhost:15672  |
+| PostgreSQL |      localhost:5432       |
+| Jaeger     | http://localhost:16686    |
+| Grafana    |  http://localhost:3002    |
+| Prometheus |   http://localhost:9090   |
 
-http://localhost:15672
+El orden esperado es: Base de datos, RabbitMQ, API, Worker, WebSocket, Frontend, Servicios de observabilidad.
 
-Usuario: guest | Contraseña: guest
+---
 
+## Usuarios y credenciales de prueba
+
+El sistema incluye usuarios creados automáticamente por `init.sql`.
+
+|  Usuario | Contraseña |   Rol    |
+|--------- |------------|----------|
+| cliente1 | 1234       | Cliente  |
+| cocina1  | 1234       |  Cocina  |
+
+El login se realiza vía `/auth/login` y la API devuelve un token JWT.
+
+---
+
+## Cómo ejecutar pruebas
+
+### Pruebas de API (Postman)
+
+Dentro de `/docs` se incluye la colección:
+```
+postman_collection.json
+```
+
+Importarla en Postman para probar:
+- Autenticación
+- Listado de productos
+- Creación de pedidos
+- Confirmación de pedidos
+- Endpoints protegidos
+
+### Prueba de carga
+
+El archivo se encuentra en `/tests/loadtest.yml`.
+
+Ejecutar:
+
+```
+npx artillery run tests/loadtest.yml
+```
+
+El reporte HTML se genera automáticamente en:
+```
+tests/report.html
+```
+
+---
+
+## Cómo observar el sistema
+
+### Jaeger – Distributed Tracing
+
+Disponible en:
+```
+http://localhost:16686
+```
+
+Servicios recomendados para inspección:
+- api
+- worker
+- ws
+
+Se recomienda observar:
+- Trazas completas de extremo a extremo
+- Latencia total
+- Spans de cada servicio
+- Propagación de contexto
+
+### Grafana – Dashboards
+
+Disponible en:
+```
+http://localhost:3002
+```
+
+Usuario: admin  
+Contraseña: admin
+
+Gráficos sugeridos para análisis:
+- Latencia p95
+- Throughput de solicitudes
+- Error rate por servicio
+- Métricas de RabbitMQ
+
+### Prometheus
+
+Disponible en:
+```
+http://localhost:9090
+```
+
+Consultas recomendadas:
+```
+http_requests_total
+rabbitmq_queue_messages_ready
+otel_span_metric
+```
+
+---
+
+## Flujo asincrónico del sistema
+
+1. El cliente crea un pedido desde el frontend o via Postman.
+2. La API recibe el pedido y publica un mensaje en la cola `eventos_pedidos` en RabbitMQ.
+3. El worker consume ese mensaje de la cola.
+4. El worker procesa la información y envía una notificación mediante WebSocket.
+5. El frontend recibe la actualización en tiempo real sin necesidad de refrescar la página.
+6. El recorrido completo puede visualizarse en Jaeger.
+
+Este flujo demuestra desacoplamiento, asincronía y comunicación basada en eventos.
+
+---
+
+## Integración y simulación de WebSocket
+
+Para probar el WebSocket localmente se incluye el archivo:
+
+```
+ws-client.html
+```
+
+Este archivo permite conectarse al servidor WebSocket ejecutándose en:
+```
+ws://localhost:3001
+```
+
+Al crear o confirmar un pedido, los eventos se reciben automáticamente en este cliente.
+
+También es posible simular un webhook externo utilizando un POST a la API que genere un nuevo evento.
+
+---
+
+## Limitaciones y mejoras futuras
+
+- No se implementó paginación en las consultas.
+- El sistema de WebSocket envía mensajes globales (se podría segmentar por sala o rol).
+- El worker realiza procesamiento secuencial; puede ampliarse a procesamiento paralelo.
+- Falta un dashboard personalizado en Grafana.
+- Falta implementación de reintentos automáticos en fallos del worker.
+
+---
+
+## Tag y commit de la entrega
+
+Se solicita entregar el proyecto etiquetado.
+
+Comando recomendado:
+
+```
+git add .
+git commit -m "Entrega TP IAEW v2.0.0"
+git tag v2.0.0
+```
+
+---
+
+## Archivo OpenAPI
+
+La especificación de la API está en `openapi.yaml`, compatible con Swagger Editor, Postman o Stoplight.
+
+---
+
+## Documentación adicional
+
+En la carpeta `/docs` se incluyen:
+- Diagramas C4
+- ADRs
+- OpenAPI
+- Colección Postman
+- Archivos auxiliares
 

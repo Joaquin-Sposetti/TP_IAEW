@@ -1,0 +1,52 @@
+config:
+  target: "http://localhost:8081"
+  phases:
+    - duration: 60
+      arrivalRate: 5
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: "Flujo completo: login, productos, crear y confirmar pedido"
+    flow:
+      # 1) Login para obtener el JWT
+      - post:
+          url: "/auth/login"
+          json:
+            username: "admin"
+            password: "admin123"
+          capture:
+            - json: "$.access_token"
+              as: "token"
+
+      # 2) Listar productos
+      - get:
+          url: "/productos"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+      # 3) Crear pedido
+      - post:
+          url: "/pedidos"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          json:
+            mesa: "10"
+            creado_por: "admin"
+          capture:
+            - json: "$.id"
+              as: "pedidoId"
+
+      # 4) Confirmar pedido (dispara evento asincrónico a RabbitMQ)
+      - post:
+          url: "/pedidos/{{ pedidoId }}/confirmar"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+      # 5) Listar pedidos
+      - get:
+          url: "/pedidos"
+          headers:
+            Authorization: "Bearer {{ token }}"

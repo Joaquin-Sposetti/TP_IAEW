@@ -1,4 +1,9 @@
 // src/ws/index.js
+process.env.OTEL_SERVICE_NAME = "ws";
+require("../otel").startOtel();
+
+
+
 const WebSocket = require('ws');
 const amqplib = require('amqplib');
 const jwt = require('jsonwebtoken');
@@ -16,12 +21,14 @@ wss.on('listening', () => {
 });
 
 wss.on('connection', (ws, req) => {
-  // === Autenticación JWT al conectar ===
   try {
-    const authHeader = req.headers['authorization'] || '';
-    const token = authHeader.replace('Bearer ', '').trim();
-    if (!token) throw new Error('Token faltante');
+    // === 🔐 Leer token desde query param o header ===
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const tokenQuery = url.searchParams.get('token');
+    const tokenHeader = req.headers['authorization']?.replace('Bearer ', '').trim();
+    const token = tokenQuery || tokenHeader;
 
+    if (!token) throw new Error('Token faltante');
     const payload = jwt.verify(token, SECRET);
     ws.user = payload;
 
@@ -34,14 +41,17 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
-  // === Registro y comunicación normal ===
   clients.add(ws);
-  ws.on('close', () => clients.delete(ws));
+  ws.on('close', () => {
+    clients.delete(ws);
+    console.log('[ws] cliente desconectado');
+  });
   ws.on('error', (e) => console.error('[ws] client error', e));
 });
 
 wss.on('error', (e) => console.error('[ws] server error', e));
 
+// === Difusión global de eventos ===
 function broadcast(obj) {
   const data = JSON.stringify(obj);
   for (const ws of clients) {
@@ -51,14 +61,17 @@ function broadcast(obj) {
   }
 }
 
+// === Suscripción a eventos de RabbitMQ ===
 (async function run() {
   try {
     const conn = await amqplib.connect(RABBIT_URL);
     console.log('[ws] AMQP connected');
+
     const ch = await conn.createChannel();
     await ch.assertExchange(EXCHANGE, 'topic', { durable: true });
     const q = await ch.assertQueue('', { exclusive: true });
     await ch.bindQueue(q.queue, EXCHANGE, 'pedido.*');
+
     console.log(`[ws] consuming '${EXCHANGE}' with binding 'pedido.*'`);
 
     ch.consume(
@@ -68,6 +81,7 @@ function broadcast(obj) {
         try {
           const payload = JSON.parse(msg.content.toString());
           const routingKey = msg.fields.routingKey;
+          console.log(`[ws] evento recibido: ${routingKey}`);
           broadcast({ type: routingKey, payload, ts: Date.now() });
           ch.ack(msg);
         } catch (e) {

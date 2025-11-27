@@ -14,12 +14,22 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@opentelemetry/api": "^1.6.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.44.0",
+    "@opentelemetry/exporter-trace-otlp-grpc": "^0.44.0",
+    "@opentelemetry/sdk-node": "^0.44.0",
     "amqplib": "^0.10.9",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "latest": "^0.2.0",
     "pg": "^8.16.3",
+    "pino": "^10.1.0",
+    "pino-pretty": "^13.1.2",
     "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "artillery": "^2.0.21"
   }
 }
